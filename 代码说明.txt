@@ -1,0 +1,84 @@
+
+所有数据参考原始实现中的数据集；
+
+1.TrainingSetPreparation.py生成模型的训练数据
+
+2.New_TrainingSetPreparation.py 
+是在300W数据集的基础上，添加Menpo数据集，处理得到新的数据集
+
+
+3.trainDAN_test.py进行model的训练；依赖文件models_test.py
+
+模型训练分为两个stage；两个stage分别单独进行训练；
+
+4.ImageLandmarks_test.py 是利用上述生成的关键点检测模型；
+在测试图片中进行关键点的标注操作；查看预测出的点在原图中的位置；
+
+
+目前想进行model的移动端移植操作；
+
+1. 想需重新训练DAN_Menpo模型(在300W基础上+Menpo数据集)
+
+参考 tflite_train.py 主要是进行模型stage1的训练，依赖文件
+tflite_replay.py 
+
+
+主要问题：生成的图结构.pb文件和DAN_Menpo_model.ckpt；   在生成冻结图到tflite文件时报错；
+
+
+服务器具体流程如下：
+
+1. 生成冻结图文件
+python tensorflow/python/tools/freeze_graph.py 
+--input_graph=/root/sjw/A/DAN_Menpo_graph.pb 
+--input_checkpoint=/root/sjw/A/DAN-Menpo.ckpt 
+--input_binary=true 
+--output_graph=/root/sjw/A/frozen_DAN_Menpo_graph.pb 
+--output_node_names=Stage1/S1_Ret
+
+
+2. 查看冻结图文件的结构及结果：
+
+bazel-bin/tensorflow/tools/graph_transforms/summarize_graph 
+--in_graph=/root/sjw/A/frozen_DAN_Menpo_graph.pb
+
+Found 2 possible inputs: (name=InputImage, type=float(1), shape=[?,112,112,1]) (name=S1_isTrain, type=bool(10), shape=<unknown>) 
+No variables spotted.
+Found 1 possible outputs: (name=Stage1/S1_Ret, op=Add) 
+Found 11150810 (11.15M) const parameters, 0 (0) variable parameters, and 19 control_edges
+Op types used: 83 Const, 79 Switch, 77 Identity, 16 FusedBatchNorm, 11 Merge, 10 BiasAdd, 9 Relu, 8 Conv2D, 5 Add, 5 Mul, 4 MaxPool, 2 Mean, 2 Placeholder, 2 MatMul, 2 Shape, 2 Squeeze, 2 Sub, 1 Pack, 1 RandomUniform, 1 RealDiv, 1 Reshape, 1 Rsqrt, 1 SquaredDifference, 1 StopGradient, 1 StridedSlice, 1 Floor
+To use with tensorflow/tools/benchmark:benchmark_model try these arguments:
+bazel run tensorflow/tools/benchmark:benchmark_model -- --graph=/root/sjw/A/frozen_DAN_Menpo_graph.pb --show_flops --input_layer=InputImage,S1_isTrain --input_layer_type=float,bool --input_layer_shape=-1,112,112,1: --output_layer=Stage1/S1_Ret
+
+3. 生成tflite文件时报错
+
+bazel-bin/tensorflow/contrib/lite/toco/toco 
+--input_file=/root/sjw/A/frozen_DAN_Menpo_graph.pb 
+--input_format=TENSORFLOW_GRAPHDEF 
+--output_format=TFLITE 
+--output_file=/root/sjw/A/DAN_Menpo_mobile.lite  
+--input_data_types=FLOAT --input_arrays=InputImage 
+--output_arrays=Stage1/S1_Ret 
+--input_shapes=1,112,112,1 
+--allow_custom_ops
+
+2018-06-01 10:41:39.261132: I tensorflow/contrib/lite/toco/import_tensorflow.cc:1366] Converting unsupported operation: SquaredDifference
+2018-06-01 10:41:39.266401: I tensorflow/contrib/lite/toco/graph_transformations/graph_transformations.cc:39] Before Removing unused ops: 299 operators, 479 arrays (0 quantized)
+2018-06-01 10:41:39.275653: I tensorflow/contrib/lite/toco/graph_transformations/graph_transformations.cc:39] After Removing unused ops pass 1: 281 operators, 452 arrays (0 quantized)
+2018-06-01 10:41:39.285957: I tensorflow/contrib/lite/toco/graph_transformations/graph_transformations.cc:39] Before general graph transformations: 281 operators, 452 arrays (0 quantized)
+2018-06-01 10:41:39.286479: F tensorflow/contrib/lite/toco/graph_transformations/resolve_batch_normalization.cc:42] Check failed: IsConstantParameterArray(*model, bn_op->inputs[1]) && IsConstantParameterArray(*model, bn_op->inputs[2]) && IsConstantParameterArray(*model, bn_op->inputs[3]) Batch normalization resolution requires that mean, multiplier and offset arrays be constant.
+Aborted (core dumped)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
