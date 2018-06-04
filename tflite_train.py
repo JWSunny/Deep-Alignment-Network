@@ -56,7 +56,6 @@ with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
     else:
         Saver.restore(sess, './A/DAN-Menpo.ckpt')
-        tf.train.write_graph(sess.graph_def, "./A/", "DAN_Menpo_graph.pb", as_text=False)
         print('Pre-trained model has been loaded!')
     print("Starting training......")
     for epoch in range(150):
@@ -64,6 +63,7 @@ with tf.Session() as sess:
         Count = 0
         while Count * 128 < Xtrain.shape[0]:
             RandomIdx = np.random.choice(Xtrain.shape[0], 10, False)
-            sess.run(dan['S1_Ret'],feed_dict={dan['InputImage']: Xtrain[RandomIdx], dan['GroundTruth']: Ytrain[RandomIdx], dan['S1_isTrain']: True,dan['S2_isTrain']: False})
+            sess.run(dan['S1_Optimizer'],feed_dict={dan['InputImage']: Xtrain[RandomIdx], dan['GroundTruth']: Ytrain[RandomIdx], dan['S1_isTrain']: True,dan['S2_isTrain']: False})
             Count += 1
+        tf.train.write_graph(sess.graph_def, "./A/", "DAN_Menpo_graph.pb", as_text=False)
         Saver.save(sess, './A/DAN-Menpo.ckpt')

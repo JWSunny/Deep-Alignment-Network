@@ -20,6 +20,16 @@ IMGSIZE = 112
 N_LANDMARK = 68
 
 
+def NormRmse(GroudTruth, Prediction):
+    Gt = tf.reshape(GroudTruth, [-1, N_LANDMARK, 2])
+    Pt = tf.reshape(Prediction, [-1, N_LANDMARK, 2])
+    loss = tf.reduce_mean(tf.sqrt(tf.reduce_sum(tf.squared_difference(Gt, Pt), 2)), 1)   ###  求每个样本 68 个关键点的预测误差
+    # loss = tf.reduce_mean(tf.sqrt(tf.reduce_sum((Gt - Pt)**2,axis=1)))
+    # norm = tf.sqrt(tf.reduce_sum(((tf.reduce_mean(Gt[:, 36:42, :],1) - \
+    #     tf.reduce_mean(Gt[:, 42:48, :],1))**2), 1))
+    norm = tf.norm(tf.reduce_mean(Gt[:, 36:42, :], 1) - tf.reduce_mean(Gt[:, 42:48, :], 1), axis=1)
+    return loss / norm
+
 def DAN(MeanShapeNumpy):  ## 初始输入：
     MeanShape = tf.constant(MeanShapeNumpy, dtype=tf.float32,name='MeanShape')
     InputImage = tf.placeholder(tf.float32, [None, IMGSIZE, IMGSIZE, 1],name='InputImage')
@@ -72,8 +82,16 @@ def DAN(MeanShapeNumpy):  ## 初始输入：
             tf.layers.dense(S1_DropOut, 256, activation=tf.nn.relu, kernel_initializer=tf.glorot_uniform_initializer()),
             training=S1_isTrain, name='S1_Fc1')
         S1_Fc2 = tf.layers.dense(S1_Fc1, N_LANDMARK * 2, name='S1_Fc2')
+
         S1_Ret = tf.add(S1_Fc2, MeanShape, name="S1_Ret")
+        S1_Cost = tf.reduce_mean(NormRmse(GroundTruth, S1_Ret), name="S1_Cost")  ### S1_Ret其实是相当于S1
+
+        with tf.control_dependencies(tf.get_collection(tf.GraphKeys.UPDATE_OPS, 'Stage1')):
+            S1_Optimizer = tf.train.AdamOptimizer(0.001).minimize(S1_Cost, var_list=tf.get_collection(
+                tf.GraphKeys.TRAINABLE_VARIABLES, "Stage1"))
 
     Ret_dict['S1_Ret'] = S1_Ret
+    Ret_dict['S1_Cost'] = S1_Cost
+    Ret_dict['S1_Optimizer'] = S1_Optimizer
 
     return Ret_dict
